@@ -1,0 +1,70 @@
+{
+    "name": "mobiexpert-xapp",
+    "version": "0.0.2",
+    "containers": [
+        {
+            "name": "mobiexpert-xapp",
+            "image": {
+                "registry": "127.0.0.1:5000",
+                "name": "mobiexpert-xapp",
+                "tag": "0.0.2"
+            }
+        }
+    ],
+    "messaging": {
+        "ports": [
+            {
+                "name": "http",
+                "container": "mobiexpert-xapp",
+                "port": 8080,
+                "description": "http service"
+            },
+            {
+                "name": "rmrroute",
+                "container": "mobiexpert-xapp",
+                "port": 4561,
+                "description": "rmr route port for the xApp"
+            },
+            {
+                "name": "rmrdata",
+                "container": "mobiexpert-xapp",
+                "port": 4560,
+                "rxMessages": ["RIC_SUB_RESP", "RIC_SUB_FAILURE", "RIC_SUB_DEL_RESP", "RIC_INDICATION"],
+                "txMessages": ["RIC_SUB_REQ", "RIC_SUB_DEL_REQ", "RIC_SGNB_ADDITION_REQ", "RIC_SGNB_ADDITION_ACK"],
+                "mtypes" : [
+                        {"name":"TESTNAME1","id":55555},
+                        {"name":"TESTNAME2","id":55556}
+                ],
+                "policies": [1],
+                "description": "rmr data port for the xApp"
+            }
+        ]
+    },
+    "rmr": {
+        "protPort": "tcp:4560",
+        "maxSize": 2072,
+        "numWorkers": 1,
+        "txMessages": [
+            "RIC_SUB_REQ", "A1_POLICY_RESP", "A1_POLICY_QUERY", "RIC_HEALTH_CHECK_RESP"
+        ],
+        "rxMessages": [
+            "RIC_SUB_RESP",
+            "A1_POLICY_REQ", "RIC_HEALTH_CHECK_REQ"
+        ],
+    "policies": [1]
+    },
+    "controls": {
+            "fileStrorage": false
+    },
+    "db" : {
+            "waitForSdl": false
+    },
+    "pbest": {
+        "csv_file": "/usr/local/bin/input.csv",
+        "pb_log_file": "/usr/local/bin/pbest_out",
+        "pb_exec_path": "/usr/local/bin/main",
+        "query_interval": 500,
+        "maintenance_time_threshold": 5000
+    }
+}
+

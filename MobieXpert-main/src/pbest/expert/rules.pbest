@@ -1,0 +1,571 @@
+```````````````````````````````````````````````````````````````````
+`  EMERALD mobiflow Sample File
+```````````````````````````````````````````````````````````````````
+
+
+{
+/******************* C Variables *******************/
+
+#define _Mobiflow_
+#include "strings.h"
+#include <stdlib.h>
+#include <stdarg.h>
+#include <sys/time.h>
+
+int DEBUG = 1;
+int VERBOSE = 0;
+int Report_ID_Tag = 1;
+
+/***** Below time value is at second level ****/
+int UE_EXPIRE_TIME = 1800;
+int BS_EXPIRE_TIME = 3600;
+int EVENT_EXPIRE_TIME = 86400;
+int UE_SESSION_EXPIRE_TIME = 3600;
+int TMSI_EXPIRE_TIME = 3600;
+
+int BTS_DEPLETION_UE_THRESHOLD = 2;
+int BTS_DEPLETION_TRANSIENT_TIME_THRESHOLD = 7;
+int BTS_DEPLETION_RELEASE_TIME_THRESHOLD = 10;
+int BTS_DEPLETION_EVENT_EXPIRE_TIME = 30;
+int BTS_DEPLETION_REG_INIT_TIME_THRESHOLD = 1;
+
+int UNSOLICITED_MSG_EVENT_EXPIRE_TIME = 10;
+
+int ptype_cntr = 0;
+int event_id_cntr = 0;
+int ue_session_id_cntr = 0;
+int UE_MSG_TRACK_COUNTER = 5;
+
+
+/******************* C Utility Functions *******************/
+int verboseprintf(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    if (VERBOSE) {
+        printf("[VERBOSE] ");
+        vprintf(fmt, args);
+        fflush (stdout);
+    }
+    va_end(args);
+    return 0;
+}
+
+int debugprintf(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    if (DEBUG) {
+        printf("[DEBUG] ");
+        vprintf(fmt, args);
+        fflush (stdout);
+    }
+    va_end(args);
+    return 0;
+}
+
+int eventprintf(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    printf("[EVENT] ");
+    vprintf(fmt, args);
+    fflush (stdout);
+    va_end(args);
+    return 0;
+}
+
+int eventprintfjson(int id, const char *name, int bs, double ts, int ue, const char *description, const char *level) {
+    if (strcmp(name, "BTS Resource Depletion") == 0)
+      printf("[EVENT]{\"Event ID\": %d, \"Event Name\": \"%s\", \"Affected base station ID\": %d, \"Time\": %.0f, \"Number of DoS UE\": %d, \"Description\": \"%s\", \"Level\": \"%s\"}\n", id, name, bs, ts, ue, description, level);
+    else
+      printf("[EVENT]{\"Event ID\": %d, \"Event Name\": \"%s\", \"Affected base station ID\": %d, \"Time\": %.0f, \"Affected UE ID\": %d, \"Description\": \"%s\", \"Level\": \"%s\"}\n", id, name, bs, ts, ue, description, level);
+}
+
+}
+
+
+```````````````````````````````````````````````````````````````````
+`              S T A R T     P B E S T    D E C L A R A T I O N S
+```````````````````````````````````````````````````````````````````
+
+```````````````````````````````````````````````````````````````````
+`` Local C Variable declarations
+```````````````````````````````````````````````````````````````````
+`` control variables
+xtype[DEBUG:			int]
+xtype[VERBOSE:			int]
+xtype[Banner:			string]
+xtype[Report_ID_Tag: 		int]
+
+`` administrative rules
+xtype[event_id_cntr: int]
+xtype[ue_session_id_cntr: int]
+xtype[ptype_cntr: int]
+xtype[UE_MSG_TRACK_COUNTER: int]
+
+xtype[UE_EXPIRE_TIME: int]
+xtype[BS_EXPIRE_TIME: int]
+xtype[EVENT_EXPIRE_TIME: int]
+xtype[UE_SESSION_EXPIRE_TIME: int]
+
+`` BTS depletion attack detection rules
+xtype[BTS_DEPLETION_UE_THRESHOLD: int]
+xtype[BTS_DEPLETION_TRANSIENT_TIME_THRESHOLD: int]
+xtype[BTS_DEPLETION_RELEASE_TIME_THRESHOLD: int]
+xtype[BTS_DEPLETION_EVENT_EXPIRE_TIME: int]
+xtype[BTS_DEPLETION_REG_INIT_TIME_THRESHOLD: int]
+
+xtype[TMSI_EXPIRE_TIME: int]
+
+xtype[UNSOLICITED_MSG_EVENT_EXPIRE_TIME: int]
+
+`set[RRCState: 0, 1, 2, 3]   `INACTIVE, RRC_IDLE, RRC_CONNECTED, RRC_RECONGIFURED
+`set[EmmState: 0, 1, 2]      `EMM_REGISTERING, EMM_REGISTERED, EMM_DEREGISTERED
+`set[SecState: 0, 1]         `SEC_CONTEXT_NOT_EXIST, SEC_CONTEXT_EXIST
+
+````````````````````````````````````````````````````````````````````
+`` Local C functions
+````````````````````````````````````````````````````````````````````
+`` C utility functions
+xtype[debugprintf:	    intfunc]
+xtype[verboseprintf:        intfunc]
+xtype[eventprintf:	    intfunc]
+xtype[eventprintfjson:	    intfunc] `Event level: Critical, Warning, Info
+
+```````````````````````````````````````````````````````````````````
+` PBEST Variable and Fact Declarations
+```````````````````````````````````````````````````````````````````
+
+ptype[ue_mobiflow
+     msg_type: string,                 `| Msg hdr  - mobiflow type [UE, BS]
+     msg_id:int,                       `| Msg hdr  - unique mobiflow event ID
+     mobiflow_ver:string,              `| Msg hdr  - version of Mobiflow
+     generator_name:string,            `| Msg hdr  - generator name (e.g., SECSM)
+     `````````````````````````````````````````````````````````
+     timestamp:double,                 `| UE meta  - timestamp (ms)
+     nr_cell_id:double,                `| UE meta  - NR (5G) basestation id
+     gnb_cu_ue_f1ap_id:int,            `| UE meta  - UE id identified by gNB CU F1AP
+     gnb_du_ue_f1ap_id:int,            `| UE meta  - UE id identified by gNB DU F1AP
+     rnti:int,                         `| UE meta  - UE RNTI
+     s_tmsi:double,                    `| UE meta  - UE s-tmsi
+     mobile_id:double,                 `| UE meta  - UE mobile device id (e.g., SUPI, SUCI, IMEI)
+     rrc_cipher_alg:int,               `| UE packet telemetry  - rrc cipher algorithm
+     rrc_integrity_alg:int,            `| UE packet telemetry  - rrc integrity algorithm
+     nas_cipher_alg:int,               `| UE packet telemetry  - nas cipher algorithm
+     nas_integrity_alg:int,            `| UE packet telemetry  - nas integrity algorithm
+     `````````````````````````````````````````````````````````
+     rrc_msg:string,                   `| UE packet-agnostic telemetry  - RRC message
+     nas_msg:string,                   `| UE packet-agnostic telemetry  - NAS message
+     rrc_state:int,                    `| UE stats  - RRC state
+     nas_state:int,                    `| UE stats  - NAS state (EMM)
+     rrc_sec_state:int,                `| UE stats  - security state
+     `````````````````````````````````````````````````````````
+     reserved_field_1:int,             `| UE packet-specific telemetry
+     reserved_field_2:int,             `| UE packet-specific telemetry
+     reserved_field_3:int              `| UE packet-specific telemetry
+]
+
+
+ptype[bs_mobiflow
+     msg_type: string,                 `| Msg hdr  - mobiflow type [UE, BS]
+     msg_id:int,                       `| Msg hdr  - unique mobiflow event ID
+     timestamp:double,                 `| Msg hdr  - timestamp (ms need)
+     mobiflow_ver:string,              `| Msg hdr  - version of Mobiflow
+     generator_name:string,            `| Msg hdr  - generator name (e.g., SECSM)
+     `````````````````````````````````````````````````````````
+     nr_cell_id:double,                `| BS meta  - basestation id
+     mcc:string,                       `| BS meta  - mobile country code
+     mnc:string,                       `| BS meta  - mobile network code
+     tac:string,                       `| BS meta  - tracking area code
+     report_period:int,                `| BS meta  - report period (ms)
+     status: int                       `| BS meta  - status (1: connected, 2: disconnected)
+     `````````````````````````````````````````````````````````
+]
+
+ptype[maintenance_event ts: double]
+
+ptype[bs_counter  value: int]
+ptype[ue_counter  value: int]
+ptype[ts_event    value: double]
+
+``BTS_depletion attack
+ptype [transient_ue_counter
+       bs_id: int,
+       value: int,
+       ts: double
+]
+
+ptype [transient_ue
+       bs_id: int,
+       rnti: int,
+       ts: double
+]
+
+ptype [event
+       id: int,
+       name: string,
+       ts: double,
+       bs_id: int,
+       ue: int
+]
+
+
+
+```````````````````````````````````````````````````````````````````
+` PBEST Rules
+```````````````````````````````````````````````````````````````````
+```````````````````````````````````````````````````````````````````````
+`` Administrative rule set
+`` These rules should be executed first
+```````````````````````````````````````````````````````````````````````
+rule[INIT_eXpert_on_bs(#99):
+    [-ue_counter]
+    [-bs_counter]
+    [+bs_mobiflow]
+==>
+    [+ue_counter|value=0]
+    [+bs_counter|value=0]
+    [+ts_event|value=0]
+    [!| debugprintf("INIT_eXpert: Initialized\n")]
+    [-#INIT_eXpert_on_bs]
+    [-#INIT_eXpert_on_ue]
+]
+
+rule[INIT_eXpert_on_ue(#99):
+    [-ue_counter]
+    [-bs_counter]
+    [+ue_mobiflow]
+==>
+    [+ue_counter|value=0]
+    [+bs_counter|value=0]
+    [+ts_event|value=0]
+    [!| debugprintf("INIT_eXpert: Initialized\n")]
+    [-#INIT_eXpert_on_bs]
+    [-#INIT_eXpert_on_ue]
+]
+
+``````` Maintenance rule sets ``````
+rule[add_maintenance_event(#98):
+    [+m:maintenance_event^ADD_MAINTENANCE_EVENT]
+    [+ts_ev:ts_event]
+==>
+    [!|verboseprintf("add maintenance event\n")]
+    [/ts_ev|value = m.ts]
+]
+
+rule[release_maintenance_event:
+    [+m:maintenance_event]
+==>
+    [-|m]
+]
+
+``````` BS rule sets ```````
+
+rule[add_bs_mobiflow(#98):
+    [+bs_mf:bs_mobiflow^ADD_BS_MOBIFLOW]
+    [+bs_cntr:bs_counter]
+==>
+    [$|bs_mf:ADD_BS_MOBIFLOW]
+    [/bs_cntr|value += 1]
+    [!|debugprintf("add_bs_mobiflow: bs_mobiflow_count: %d\n", bs_cntr.value)]
+]
+
+rule[bs_mobiflow_update_ts:
+    [+bs_mf:bs_mobiflow]
+    [+ts_ev:ts_event]
+    [?|bs_mf.timestamp > ts_ev.value]
+==>
+    [/ts_ev|value = bs_mf.timestamp]
+]
+
+rule[remove_bs_mobiflow:
+    [+bs_mf:bs_mobiflow]
+    [+bs_cntr:bs_counter]
+    [+ts_ev:ts_event]
+    [?|(ts_ev.value - bs_mf.timestamp) > 'BS_EXPIRE_TIME]
+==>
+    [/bs_cntr|value -= 1]
+    [!|debugprintf("remove bs mobiflow record: %d\n", bs_mf.msg_id)]
+    [-|bs_mf]
+]
+
+``````` UE rule sets ```````
+
+rule[add_ue_mobiflow(#98):
+    [+ue_mf:ue_mobiflow^ADD_UE_MOBIFLOW]
+    [+ue_cntr:ue_counter]
+==>
+    [$|ue_mf:ADD_UE_MOBIFLOW]
+    [/ue_cntr|value += 1]
+    [!|debugprintf("add_ue_mobiflow: ue_mobiflow_count: %d\n", ue_cntr.value)]
+]
+
+rule[ue_mobiflow_update_ts:
+    [+ue_mf:ue_mobiflow]
+    [+ts_ev:ts_event]
+    [?|ue_mf.timestamp > ts_ev.value]
+==>
+    [/ts_ev|value = ue_mf.timestamp]
+]
+
+rule[remove_ue_mobiflow:
+    [+ue_mf:ue_mobiflow]
+    [+ue_cntr:ue_counter]
+    [+ts_ev:ts_event]
+    [?|(ts_ev.value - ue_mf.timestamp) > 'UE_EXPIRE_TIME]
+==>
+    [!|debugprintf("remove ue mobiflow record: %d\n", ue_mf.msg_id)]
+    [/ue_cntr|value -= 1]
+    [-|ue_mf]
+]
+
+``````` Event rule sets ```````
+
+rule[remove_event:
+    [+ev:event]
+    [+ts_ev:ts_event]
+    [?|(ts_ev.value - ev.ts) > 'EVENT_EXPIRE_TIME]
+==>
+    [!|debugprintf("remove event: %d\n", ev.id)]
+    [-|ev]
+]
+
+``````` Live UE & RRC/NAS message tracking ```````
+
+ptype[ue_session
+      id:                   int,
+      nr_cell_id:           double,
+      gnb_cu_ue_f1ap_id:    int,
+      gnb_du_ue_f1ap_id:    int,
+      rnti:                 int,
+      s_tmsi:               double,
+      rrc_state:            int,
+      nas_state:            int,
+      rrc_sec_state:        int,
+      msg_count:            int,
+      ts:                   double
+]
+
+ptype[ue_msg
+      ue_session_id:    int,
+      msg_index:        int,
+      rrc_msg:          string,
+      nas_msg:          string,
+      ts:               double
+]
+
+
+`` rules for live UE sessions
+rule[add_ue_session(#97):
+    [+ue_mf:ue_mobiflow^UE_SESSION]
+    [-ue_session|nr_cell_id == ue_mf.nr_cell_id, gnb_du_ue_f1ap_id == ue_mf.gnb_du_ue_f1ap_id]
+==>
+    [+ue_session|id                 = 'ue_session_id_cntr,
+                 nr_cell_id         = ue_mf.nr_cell_id,
+                 gnb_cu_ue_f1ap_id  = ue_mf.gnb_cu_ue_f1ap_id,
+                 gnb_du_ue_f1ap_id  = ue_mf.gnb_du_ue_f1ap_id,
+                 rnti               = ue_mf.rnti,
+                 s_tmsi             = ue_mf.s_tmsi,
+                 rrc_state          = ue_mf.rrc_state,
+                 nas_state          = ue_mf.nas_state,
+                 rrc_sec_state      = ue_mf.rrc_sec_state,
+                 msg_count          = 1,
+                 ts                 = ue_mf.timestamp
+    ]
+    [+ue_msg|ue_session_id  = 'ue_session_id_cntr,
+             msg_index      = 1,
+             rrc_msg        = ue_mf.rrc_msg,
+             nas_msg        = ue_mf.nas_msg,
+             ts             = ue_mf.timestamp
+    ]
+    [!|'ue_session_id_cntr += 1]
+    [!|debugprintf("Add UE session: %d\n", ue_mf.rnti)]
+    [$|ue_mf:UE_SESSION]
+]
+
+rule[update_ue_session(#97):
+    [+ue_mf:ue_mobiflow^UE_SESSION]
+    [+session:ue_session|nr_cell_id == ue_mf.nr_cell_id, rnti == ue_mf.rnti]
+==>
+    [+ue_msg|ue_session_id  = session.id,
+             msg_index      = session.msg_count + 1,
+             rrc_msg        = ue_mf.rrc_msg,
+             nas_msg        = ue_mf.nas_msg,
+             ts             = ue_mf.timestamp
+    ]
+    [/session|msg_count += 1,
+              s_tmsi        = ue_mf.s_tmsi,
+              rrc_state     = ue_mf.rrc_state,
+              nas_state     = ue_mf.nas_state,
+              rrc_sec_state = ue_mf.rrc_sec_state,
+              ts            = ue_mf.timestamp
+    ]
+    [!|debugprintf("Update UE session: %d\n", session.rnti)]
+    [$|ue_mf:UE_SESSION]
+]
+
+
+rule[remove_ue_session:
+    [+session:ue_session]
+    [+ts_ev:ts_event]
+    [?|session.rrc_state < 2 && session.nas_state == 0]
+    [?|(ts_ev.value - session.ts) > 'UE_SESSION_EXPIRE_TIME]
+==>
+    [!|debugprintf("Remove UE session: %d at BS %f\n", session.rnti, session.nr_cell_id)]
+    [-|session]
+]
+
+`` rules to UE message trace management
+rule[remove_ue_msg_1:
+    [+m:ue_msg]
+    [-ue_session|id == m.ue_session_id]
+==>
+    [!|verboseprintf("Remove UE msg for expired UE session\n")]
+    [-|m]
+]
+
+rule[remove_ue_msg_2:
+    [+m:ue_msg]
+    [+session:ue_session|id == m.ue_session_id]
+    [?|session.msg_count - m.msg_index >= 'UE_MSG_TRACK_COUNTER]
+==>
+    [!|verboseprintf("Remove UE msg for expired msg counter\n")]
+    [-|m]
+]
+
+```````````````````````````````````````````````````````````````````````
+`` Null cipher detection rule set
+```````````````````````````````````````````````````````````````````````
+rule[rrc_null_cipher_detection_1:
+    [+ue_mf:ue_mobiflow^RRC_NULL_CIPHER]
+    [?|strcmp(ue_mf.rrc_msg, "SecurityModeComplete") == 0]
+    [?|ue_mf.rrc_sec_state < 3]
+    [?|ue_mf.rrc_cipher_alg == 0]
+==>
+    [+event|id = 'event_id_cntr,
+            name = "RRC Null Cipher",
+            ts = ue_mf.timestamp,
+            bs_id = ue_mf.nr_cell_id,
+            ue = ue_mf.rnti
+    ]
+    [!|'event_id_cntr += 1 ]
+    [$|ue_mf:RRC_NULL_CIPHER]
+    [!|debugprintf("[RRC Null Cipher][GENERATE_EVENT] Event detected for UE %d at BS %.0f\n", ue_mf.rnti, ue_mf.nr_cell_id)]
+    [!|eventprintfjson('event_id_cntr, "RRC Null Cipher", ue_mf.nr_cell_id, ue_mf.timestamp, ue_mf.rnti, "The UE uses null cipher mode in its RRC session, its RRC traffic data is subject to sniffing attack.", "Critical")]
+]
+
+rule[rrc_null_integrity_detection_1:
+    [+ue_mf:ue_mobiflow^RRC_NULL_INTEGRITY]
+    [?|strcmp(ue_mf.rrc_msg, "SecurityModeComplete") == 0]
+    [?|ue_mf.rrc_sec_state < 3]
+    [?|ue_mf.rrc_integrity_alg == 0]
+==>
+    [+event|id = 'event_id_cntr,
+            name = "RRC Null Integrity",
+            ts = ue_mf.timestamp,
+            bs_id = ue_mf.nr_cell_id,
+            ue = ue_mf.rnti
+    ]
+    [!|'event_id_cntr += 1 ]
+    [$|ue_mf:RRC_NULL_INTEGRITY]
+    [!|debugprintf("[RRC Null Integrity][GENERATE_EVENT] Event detected for UE %d at BS %.0f\n", ue_mf.rnti, ue_mf.nr_cell_id)]
+    [!|eventprintfjson('event_id_cntr, "Null Integrity", ue_mf.nr_cell_id, ue_mf.timestamp, ue_mf.rnti, "The UE uses null integrity mode in its RRC session, its RRC traffic data is subject to Man-in-the-Middle attack.", "Critical")]
+]
+
+rule[nas_null_cipher_detection_1:
+    [?|1 == 0] ` TODO: temporarily disable this rule
+    [+ue_mf:ue_mobiflow^NAS_NULL_CIPHER]
+    [?|strcmp(ue_mf.nas_msg, "Securitymodecomplete") == 0]
+    [?|ue_mf.nas_cipher_alg == 0]
+==>
+    [+event|id = 'event_id_cntr,
+            name = "NAS Null Cipher",
+            ts = ue_mf.timestamp,
+            bs_id = ue_mf.nr_cell_id,
+            ue = ue_mf.rnti
+    ]
+    [!|'event_id_cntr += 1 ]
+    [$|ue_mf:NAS_NULL_CIPHER]
+    [!|debugprintf("[NAS Null Cipher][GENERATE_EVENT] Event detected for UE %d at BS %.0f\n", ue_mf.rnti, ue_mf.nr_cell_id)]
+    [!|eventprintfjson('event_id_cntr, "NAS Null Cipher", ue_mf.nr_cell_id, ue_mf.timestamp, ue_mf.rnti,  "The UE uses null cipher mode in its NAS session, its NAS traffic data is subject to sniffing attack.", "Critical")]
+]
+
+rule[nas_null_integrity_detection_1:
+    [?|1 == 0] ` TODO: temporarily disable this rule
+    [+ue_mf:ue_mobiflow^NAS_NULL_INTEGRITY]
+    [?|strcmp(ue_mf.nas_msg, "Securitymodecomplete") == 0]
+    [?|ue_mf.nas_integrity_alg == 0]
+==>
+    [+event|id = 'event_id_cntr,
+            name = "NAS Null Integrity",
+            ts = ue_mf.timestamp,
+            bs_id = ue_mf.nr_cell_id,
+            ue = ue_mf.rnti
+    ]
+    [!|'event_id_cntr += 1 ]
+    [$|ue_mf:NAS_NULL_INTEGRITY]
+    [!|debugprintf("[NAS Null Integrity][GENERATE_EVENT] Event detected for UE %d at BS %.0f\n", ue_mf.rnti, ue_mf.nr_cell_id)]
+    [!|eventprintfjson('event_id_cntr, "NAS Null Integrity", ue_mf.nr_cell_id, ue_mf.timestamp, ue_mf.rnti, "The UE uses null integrity mode in its NAS session, its NAS traffic data is subject to Man-in-the-Middle attack.", "Critical")]
+]
+
+```````````````````````````````````````````````````````````````````````
+`` Identity exposure detection rule set
+```````````````````````````````````````````````````````````````````````
+rule[imsi_extractor_detection:
+    [+ue_mf:ue_mobiflow^ID_EXPOSURE]
+    [?|strcmp(ue_mf.nas_msg, "Identityresponse") == 0]
+    [?|ue_mf.nas_state < 2 || ue_mf.nas_cipher_alg == 0]
+==>
+    [+event|id = 'event_id_cntr,
+            name = "Identity Exposure",
+            ts = ue_mf.timestamp,
+            bs_id = ue_mf.nr_cell_id,
+            ue = ue_mf.rnti
+    ]
+    [!|'event_id_cntr += 1 ]
+    [$|ue_mf:ID_EXPOSURE]
+    [!|debugprintf("[Identity Exposure][GENERATE_EVENT] Event detected for UE %d at BS %.0f\n", ue_mf.rnti, ue_mf.nr_cell_id)]
+    [!|eventprintfjson('event_id_cntr, "Identity Exposure", ue_mf.nr_cell_id, ue_mf.timestamp, ue_mf.rnti, "The UE transmitted its unique identifier over plain-text NAS traffic. Its identity could have been leaked to attackers listening to the channel.", "Warning")]
+]
+
+```````````````````````````````````````````````````````````````````````
+`` Blind DoS attack (RRC_Connection_Request) rule set
+```````````````````````````````````````````````````````````````````````
+rule[blind_dos_detect:
+    [+ue1:ue_session]
+    [+ue2:ue_session^BLIND_DOS]
+    [?|ue2.nr_cell_id == ue1.nr_cell_id && ue2.rnti != ue1.rnti]
+    [?|ue1.rrc_state > 1 && ue2.rrc_state > 1]
+    [?|ue2.ts > ue1.ts]
+    [?|ue2.s_tmsi != 0]
+    [?|ue2.s_tmsi == ue1.s_tmsi]
+==>
+    [+event|id = 'event_id_cntr,
+            name = "Blind DoS",
+            ts = ue2.ts,
+            bs_id = ue2.nr_cell_id,
+            ue = ue2.rnti
+    ]
+    [!|'event_id_cntr += 1]
+    [$|ue2:BLIND_DOS]
+    [!|debugprintf("[Blind DoS][GENERATE_EVENT] Event detected for bs %.0f UE1 %d UE2 %d with same TMSI %.0f\n", ue2.nr_cell_id, ue1.rnti, ue2.rnti, ue1.s_tmsi)]
+    [!|eventprintfjson('event_id_cntr, "Blind DoS", ue2.nr_cell_id, ue2.ts, ue2.rnti, "A UE initiated an RRC connection using the same S-TMSI as another connected UE. The previously connected UE's session could have been released by the gNB.", "Critical")]
+]
+
+```````````````````````````````````````````````````````````````````````
+`` IMSI Notification Rule set
+```````````````````````````````````````````````````````````````````````
+rule[ue_imsi_notification:
+    [?|1 == 0] ` TODO: temporarily disable this rule
+    [+ue_mf:ue_mobiflow^IMSI_NOTIFICATION]
+    [?|strcmp(ue_mf.nas_msg, "Registrationrequest") == 0]
+    [?|ue_mf.reserved_field_1 == 1] `The UE uses IMSI as identity type
+    [?|ue_mf.mobile_id == 2089900004788] `The UE's IMSI matches the number that triggers notification
+==>
+    [+event|id = 'event_id_cntr,
+            name = "UE IMSI Notification",
+            ts = ue_mf.timestamp,
+            bs_id = ue_mf.nr_cell_id,
+            ue = ue_mf.rnti
+    ]
+    [$|ue_mf:IMSI_NOTIFICATION]
+    [!|eventprintfjson('event_id_cntr, "UE IMSI Notification", ue_mf.nr_cell_id, ue_mf.timestamp, ue_mf.rnti, "A UE with IMSI 2089900004788 has just started registration to the network.", "Info")]
+]
