@@ -1,0 +1,238 @@
+# Prometheus Configuration for FBS Detection Monitoring
+# Location: llm_fbs_utils/monitoring/prometheus.yml
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'fbs-detection'
+    environment: 'development'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - 'alertmanager:9093'
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # MobiFlow-Auditor metrics
+  - job_name: 'mobiflow-auditor'
+    static_configs:
+      - targets: ['mobiflow-auditor:8080']
+        labels:
+          service: 'auditor'
+          component: 'telemetry'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # MobieXpert metrics
+  - job_name: 'mobiexpert'
+    static_configs:
+      - targets: ['mobiexpert:8081']
+        labels:
+          service: 'expert'
+          component: 'detection'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # LLM API metrics
+  - job_name: 'llm-api'
+    static_configs:
+      - targets: ['mobiflow-auditor:8090']
+        labels:
+          service: 'llm-api'
+          component: 'api'
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  # Redis metrics (using Redis exporter)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          service: 'redis'
+          component: 'sdl'
+
+  # Docker metrics
+  - job_name: 'docker'
+    static_configs:
+      - targets: ['docker-host:9323']
+        labels:
+          service: 'docker'
+          component: 'containers'
+
+  # Node exporter for system metrics
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node'
+          component: 'system'
+
+  # Custom FBS detection metrics endpoint
+  - job_name: 'fbs-detection'
+    static_configs:
+      - targets: ['llm-orchestrator:9091']
+        labels:
+          service: 'fbs-detection'
+          component: 'orchestrator'
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+    params:
+      module: [detection]
+
+# Service discovery for dynamic targets
+# - job_name: 'kubernetes-pods'
+#   kubernetes_sd_configs:
+#     - role: pod
+#   relabel_configs:
+#     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+#       action: keep
+#       regex: true
+
+---
+# alerts.yml - Alert Rules
+# Location: llm_fbs_utils/monitoring/alerts.yml
+
+groups:
+  - name: fbs_detection_alerts
+    interval: 30s
+    rules:
+      # FBS Detection Alert
+      - alert: FBSDetected
+        expr: fbs_detections_total > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: detection
+        annotations:
+          summary: "Fake Base Station detected"
+          description: "FBS detection triggered {{ $value }} times in the last minute"
+
+      # High False Positive Rate
+      - alert: HighFalsePositiveRate
+        expr: rate(false_positives_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: detection
+        annotations:
+          summary: "High false positive rate"
+          description: "False positive rate is {{ $value }} per second"
+
+      # Service Down Alerts
+      - alert: AuditorDown
+        expr: up{job="mobiflow-auditor"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: auditor
+        annotations:
+          summary: "MobiFlow-Auditor is down"
+          description: "MobiFlow-Auditor has been down for more than 1 minute"
+
+      - alert: ExpertDown
+        expr: up{job="mobiexpert"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: expert
+        annotations:
+          summary: "MobieXpert is down"
+          description: "MobieXpert has been down for more than 1 minute"
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "Redis SDL is down"
+          description: "Redis SDL has been down for more than 1 minute"
+
+      # Performance Alerts
+      - alert: HighLatency
+        expr: http_request_duration_seconds{quantile="0.99"} > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API latency"
+          description: "99th percentile latency is {{ $value }} seconds"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 90%"
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80%"
+
+      # Detection Performance
+      - alert: LowDetectionRate
+        expr: rate(successful_detections_total[10m]) / rate(attack_scenarios_total[10m]) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: detection
+        annotations:
+          summary: "Low detection rate"
+          description: "Detection rate is below 80%"
+
+      - alert: SlowDetectionTime
+        expr: detection_time_seconds{quantile="0.5"} > 60
+        for: 5m
+        labels:
+          severity: warning
+          component: detection
+        annotations:
+          summary: "Slow detection time"
+          description: "Median detection time is above 60 seconds"
+
+      # Data Processing
+      - alert: HighRecordBacklog
+        expr: redis_db_keys{db="0"} > 10000
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "High record backlog in Redis"
+          description: "Redis has {{ $value }} keys, indicating potential backlog"
+
+      - alert: RuleReloadFailure
+        expr: increase(rule_reload_failures_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: error
+          component: expert
+        annotations:
+          summary: "Rule reload failed"
+          description: "Failed to reload detection rules {{ $value }} times"

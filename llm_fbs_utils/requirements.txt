@@ -1,0 +1,93 @@
+# Requirements for LLM FBS Utils
+# Location: llm_fbs_utils/requirements.txt
+
+# Core Dependencies
+python>=3.8
+
+# Web Framework
+flask==2.3.3
+flask-cors==4.0.0
+requests==2.31.0
+
+# LLM Framework
+dspy-ai==2.4.0
+openai==1.3.0
+
+# Data Processing
+pandas==2.0.3
+numpy==1.24.3
+pyyaml==6.0.1
+json5==0.9.14
+
+# Redis Client
+redis==5.0.0
+
+# Network Analysis
+scapy==2.5.0
+pyshark==0.6  # Alternative to scapy for PCAP parsing
+
+# SSH/Remote Execution
+paramiko==3.3.1
+
+# Testing
+pytest==7.4.2
+pytest-cov==4.1.0
+unittest-xml-reporting==3.2.0
+
+# Monitoring & Logging
+prometheus-client==0.17.1
+python-json-logger==2.0.7
+
+# Async Support (if needed)
+aiohttp==3.8.5
+asyncio==3.4.3
+
+# Documentation
+sphinx==7.2.6
+sphinx-rtd-theme==1.3.0
+
+# Code Quality
+black==23.7.0
+flake8==6.1.0
+mypy==1.5.1
+
+# Additional ML/Analysis (optional)
+scikit-learn==1.3.0
+matplotlib==3.7.2
+seaborn==0.12.2
+
+# Time Series Analysis (optional)
+statsmodels==0.14.0
+
+# Development Tools
+ipython==8.14.0
+jupyter==1.0.0
+ipdb==0.13.13
+
+# Environment Management
+python-dotenv==1.0.0
+
+# CLI Tools
+click==8.1.7
+rich==13.5.2
+tabulate==0.9.0
+
+# JSON Schema Validation
+jsonschema==4.19.0
+
+# Rate Limiting
+ratelimit==2.2.1
+
+# Retry Logic
+tenacity==8.2.3
+
+# Configuration Management
+configparser==6.0.0
+pydantic==2.3.0
+
+# Optional: For OAI Integration
+pyzmq==25.1.1  # For ZMQ communication
+
+# Optional: For Advanced Scenarios
+gymnasium==0.29.1  # For RL-based optimization
+stable-baselines3==2.1.0  # RL algorithms

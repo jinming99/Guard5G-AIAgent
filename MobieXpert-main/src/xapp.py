@@ -25,6 +25,12 @@ from .handler import *
 from mdclogpy import Level
 from .pypbest import MobiFlowLoader, PBest
 
+# === NEW IMPORTS FOR LLM INTEGRATION ===
+from flask import Flask, request, jsonify
+from .pypbest import llm_rule_patch
+import threading
+import yaml
+
 class MobieXpertXapp:
 
     __XAPP_CONFIG_PATH = "/tmp/init/config-file.json"
@@ -34,6 +40,7 @@ class MobieXpertXapp:
     __PLT_NAME_SPACE = "ricplt"
     __HTTP_PORT = 8080
     __RMR_PORT = 4560
+    __RULE_API_PORT = 8091  # NEW: Port for rule API
     __XAPP_HTTP_END_POINT = "service-%s-%s-http.%s:%d" % (__XAPP_NAME_SPACE, __XAPP_NAME, __XAPP_NAME_SPACE, __HTTP_PORT)
     __XAPP_RMR_END_POINT = "service-%s-%s-rmr.%s:%d" % (__XAPP_NAME_SPACE, __XAPP_NAME, __XAPP_NAME_SPACE, __RMR_PORT)
     __CONFIG_PATH = "/ric/v1/config"
@@ -45,6 +52,11 @@ class MobieXpertXapp:
                                  rmr_port=self.__RMR_PORT,
                                  post_init=self._post_init,
                                  use_fake_sdl=bool(fake_sdl))
+        
+        # === NEW: Initialize Flask app for rule API ===
+        self.rule_api_app = Flask(__name__)
+        self.pbest_engine = None  # Will be set in _post_init
+        self._setup_rule_api_endpoints()
 
     def _post_init(self, rmr_xapp):
         """
@@ -86,6 +98,13 @@ class MobieXpertXapp:
         # init PBest instance
         pb = PBest(pb_exec_path, pb_log_file, csv_file, sdl_mgr)
         pb.run()
+        
+        # === NEW: Store P-BEST engine reference and set up rule patching ===
+        self.pbest_engine = pb
+        llm_rule_patch.set_pbest_engine(self.pbest_engine)
+        
+        # === NEW: Start the rule API server ===
+        self._start_rule_api(rmr_xapp)
 
     def _register(self, rmr_xapp):
         """
@@ -153,6 +172,161 @@ class MobieXpertXapp:
                                    str(summary[rmr.RMR_MS_MSG_TYPE]))
         rmr_xapp.rmr_free(sbuf)
 
+    # === NEW: Flask API endpoints for rule management ===
+    def _setup_rule_api_endpoints(self):
+        """Setup Flask endpoints for rule management"""
+        
+        @self.rule_api_app.route('/health', methods=['GET'])
+        def health_check():
+            """Health check endpoint"""
+            return jsonify({
+                'status': 'healthy',
+                'service': 'mobiexpert-rule-api',
+                'port': self.__RULE_API_PORT
+            })
+        
+        @self.rule_api_app.route('/rules', methods=['POST'])
+        def update_rules():
+            """
+            POST endpoint to hot-reload P-BEST rules
+            Expects YAML content in request body
+            """
+            try:
+                # Get YAML content from request
+                if request.content_type == 'application/yaml':
+                    yaml_content = request.data.decode('utf-8')
+                elif request.content_type == 'application/json':
+                    # Support JSON with 'yaml' field
+                    json_data = request.get_json()
+                    yaml_content = json_data.get('yaml', '')
+                else:
+                    yaml_content = request.data.decode('utf-8')
+                
+                if not yaml_content:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'No YAML content provided'
+                    }), 400
+                
+                # Apply rules using the patcher
+                result = llm_rule_patch.patch_rules(yaml_content)
+                
+                # Log the result
+                if hasattr(self, '_rmr_xapp'):
+                    self._rmr_xapp.logger.info(f"Rule update result: {result}")
+                
+                # Return appropriate response
+                if result['status'] == 'success':
+                    return jsonify(result), 200
+                else:
+                    return jsonify(result), 400
+                    
+            except Exception as e:
+                error_msg = f"Error in /rules endpoint: {e}"
+                if hasattr(self, '_rmr_xapp'):
+                    self._rmr_xapp.logger.error(error_msg)
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                }), 500
+
+        @self.rule_api_app.route('/rules', methods=['GET'])
+        def get_rules():
+            """
+            GET endpoint to retrieve current rules
+            """
+            try:
+                result = llm_rule_patch.get_current_rules()
+                
+                if result['status'] == 'success':
+                    return jsonify(result), 200
+                else:
+                    return jsonify(result), 404
+                    
+            except Exception as e:
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                }), 500
+
+        @self.rule_api_app.route('/rules/test', methods=['POST'])
+        def test_rule():
+            """
+            Test a rule against sample data
+            """
+            try:
+                data = request.get_json()
+                
+                if not data or 'rule' not in data or 'test_data' not in data:
+                    return jsonify({
+                        'status': 'error',
+                        'message': 'Missing rule or test_data in request'
+                    }), 400
+                
+                # Parse rule if it's in YAML string format
+                rule = data['rule']
+                if isinstance(rule, str):
+                    rule = yaml.safe_load(rule)
+                
+                # Test the rule
+                result = llm_rule_patch.test_rule(rule, data['test_data'])
+                
+                return jsonify(result), 200
+                
+            except Exception as e:
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                }), 500
+
+        @self.rule_api_app.route('/rules/reload', methods=['POST'])
+        def reload_rules_from_file():
+            """
+            Reload rules from a specified file
+            """
+            try:
+                data = request.get_json()
+                filename = data.get('filename', 'experiments/generated_rules/latest.yaml')
+                
+                # Load rules from file
+                with open(filename, 'r') as f:
+                    yaml_content = f.read()
+                
+                # Apply rules
+                result = llm_rule_patch.patch_rules(yaml_content)
+                
+                return jsonify(result), 200 if result['status'] == 'success' else 400
+                
+            except FileNotFoundError:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'File not found: {filename}'
+                }), 404
+            except Exception as e:
+                return jsonify({
+                    'status': 'error',
+                    'message': str(e)
+                }), 500
+
+    def _start_rule_api(self, rmr_xapp):
+        """Start the Flask API server for rule management"""
+        def run_flask():
+            try:
+                rmr_xapp.logger.info(f"Starting Rule API on port {self.__RULE_API_PORT}")
+                self.rule_api_app.run(
+                    host='0.0.0.0', 
+                    port=self.__RULE_API_PORT, 
+                    debug=False,
+                    use_reloader=False
+                )
+            except Exception as e:
+                rmr_xapp.logger.error(f"Failed to start Rule API: {e}")
+        
+        # Start Flask in a background thread
+        api_thread = threading.Thread(target=run_flask, daemon=True)
+        api_thread.start()
+        rmr_xapp.logger.info(f"Rule API thread started on port {self.__RULE_API_PORT}")
+
     def createHandlers(self):
         """
         Function that creates all the handlers for RMR Messages
@@ -176,6 +350,3 @@ class MobieXpertXapp:
         TODO: could we register a signal handler for Docker SIGTERM that calls this?
         """
         self._rmr_xapp.stop()
-
-
-

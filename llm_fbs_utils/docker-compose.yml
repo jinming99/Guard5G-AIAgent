@@ -1,0 +1,193 @@
+# Docker Compose for 5G-Spector FBS Detection System
+# Location: llm_fbs_utils/docker-compose.yml
+
+version: '3.8'
+
+services:
+  # Redis SDL (Shared Data Layer)
+  redis-sdl:
+    image: redis:7-alpine
+    container_name: fbs-redis-sdl
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - fbs-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # MobiFlow-Auditor xApp
+  mobiflow-auditor:
+    build:
+      context: ../MobiFlow-Auditor
+      dockerfile: Dockerfile
+    container_name: fbs-auditor
+    depends_on:
+      - redis-sdl
+    environment:
+      - SDL_HOST=redis-sdl
+      - SDL_PORT=6379
+      - ENABLE_LLM_API=true
+      - LLM_API_PORT=8090
+    ports:
+      - "8090:8090"  # LLM Control API
+      - "8080:8080"  # xApp API
+    volumes:
+      - ./MobiFlow-Auditor/src:/app/src
+      - auditor-logs:/app/logs
+    networks:
+      - fbs-network
+    command: python src/main.py --sdl-host redis-sdl --enable-llm-api
+    restart: unless-stopped
+
+  # MobieXpert Detection xApp
+  mobiexpert:
+    build:
+      context: ../MobieXpert
+      dockerfile: Dockerfile
+    container_name: fbs-expert
+    depends_on:
+      - redis-sdl
+      - mobiflow-auditor
+    environment:
+      - SDL_HOST=redis-sdl
+      - SDL_PORT=6379
+      - RULE_API_PORT=8091
+    ports:
+      - "8091:8091"  # Rule API
+      - "8081:8081"  # xApp API
+    volumes:
+      - ./MobieXpert/src:/app/src
+      - ./MobieXpert/experiments:/app/experiments
+      - expert-logs:/app/logs
+    networks:
+      - fbs-network
+    command: python src/xapp.py --sdl-host redis-sdl
+    restart: unless-stopped
+
+  # OAI gNB (5G Base Station)
+  oai-gnb:
+    build:
+      context: ../OAI-5G
+      dockerfile: docker/Dockerfile.gnb.ubuntu20
+    container_name: fbs-gnb
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+      - IPC_LOCK
+    devices:
+      - /dev/cpu:/dev/cpu
+      - /dev/hugepages:/dev/hugepages
+    environment:
+      - TZ=UTC
+      - USE_RFSIM=1
+      - OAI_SCENARIO_MODE=false
+    ports:
+      - "38412:38412/sctp"  # NGAP
+      - "2152:2152/udp"     # GTP-U
+      - "4200:4200"         # ZMQ RF simulator
+      - "4201:4201"         # ZMQ RF simulator (FBS)
+    volumes:
+      - ./OAI-5G/ci-scripts/conf_files:/opt/oai-gnb/etc
+      - ./OAI-5G/tools/fbs_scenarios:/opt/oai-gnb/fbs_scenarios
+      - gnb-logs:/opt/oai-gnb/logs
+      - /dev/shm:/dev/shm
+    networks:
+      - fbs-network
+    command: >
+      /opt/oai-gnb/bin/nr-softmodem 
+      -O /opt/oai-gnb/etc/gnb.sa.band78.fr1.106PRB.usrpb210.conf
+      --sa --rfsim
+    restart: unless-stopped
+
+  # LLM Orchestrator (Optional - for automated testing)
+  llm-orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.llm
+    container_name: fbs-llm
+    depends_on:
+      - mobiflow-auditor
+      - mobiexpert
+    environment:
+      - AUDITOR_API=http://mobiflow-auditor:8090
+      - EXPERT_API=http://mobiexpert:8091
+      - OAI_HOST=oai-gnb
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./llm_fbs_utils:/app
+      - ./experiments:/app/experiments
+      - llm-logs:/app/logs
+    networks:
+      - fbs-network
+    command: python llm_driver.py interactive
+    stdin_open: true
+    tty: true
+
+  # Monitoring Stack (Optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: fbs-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - fbs-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fbs-grafana
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - fbs-network
+
+networks:
+  fbs-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis-data:
+  auditor-logs:
+  expert-logs:
+  gnb-logs:
+  llm-logs:
+  prometheus-data:
+  grafana-data:
+
+# Dockerfile.llm for LLM Orchestrator
+# Create this as a separate file: llm_fbs_utils/Dockerfile.llm
+#
+# FROM python:3.9-slim
+# 
+# WORKDIR /app
+# 
+# COPY requirements.txt .
+# RUN pip install --no-cache-dir -r requirements.txt
+# 
+# COPY . .
+# 
+# CMD ["python", "llm_driver.py"]

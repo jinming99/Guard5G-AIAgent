@@ -1,0 +1,177 @@
+# P-BEST Rule Template for FBS Detection
+# Location: MobieXpert/experiments/rule_templates/fbs_detection_template.yaml
+
+rules:
+  - name: "FBS_Multiple_Attach_Failures"
+    id: "fbs_001"
+    description: "Detect fake base station based on multiple attach failures"
+    priority: 9
+    condition:
+      and:
+        - field: "attach_failures"
+          gte: 3
+        - field: "time_window"
+          lte: 300  # Within 5 minutes
+    action:
+      type: "alert"
+      severity: "high"
+      message: "Potential FBS: Multiple attach failures detected"
+      metadata:
+        detection_type: "attach_failure_pattern"
+    
+  - name: "FBS_Cipher_Downgrade"
+    id: "fbs_002"
+    description: "Detect cipher algorithm downgrade attack"
+    priority: 10
+    condition:
+      or:
+        - field: "cipher_algo"
+          eq: "NULL"
+        - field: "cipher_algo"
+          eq: "A5/0"
+        - field: "cipher_algo"
+          eq: "EEA0"
+    action:
+      type: "alert"
+      severity: "critical"
+      message: "FBS Detected: Null or weak ciphering in use"
+      metadata:
+        detection_type: "cipher_downgrade"
+        
+  - name: "FBS_Authentication_Failures"
+    id: "fbs_003"
+    description: "Detect repeated authentication failures"
+    priority: 9
+    condition:
+      and:
+        - field: "auth_reject_count"
+          gt: 0
+        - field: "time_since_last_auth"
+          lt: 60
+    action:
+      type: "alert"
+      severity: "high"
+      message: "Potential FBS: Authentication failures detected"
+      metadata:
+        detection_type: "auth_failure"
+        
+  - name: "FBS_Rapid_Cell_Reselection"
+    id: "fbs_004"
+    description: "Detect abnormal cell reselection patterns"
+    priority: 7
+    condition:
+      and:
+        - field: "cell_reselection_count"
+          gte: 5
+        - field: "time_window"
+          lte: 60  # Within 1 minute
+    action:
+      type: "alert"
+      severity: "medium"
+      message: "Suspicious activity: Rapid cell reselections"
+      metadata:
+        detection_type: "rapid_reselection"
+        
+  - name: "FBS_Signal_Anomaly"
+    id: "fbs_005"
+    description: "Detect signal strength anomalies"
+    priority: 6
+    condition:
+      and:
+        - field: "signal_anomaly"
+          eq: true
+        - field: "rsrp_delta"
+          gt: 20  # Sudden 20dB increase
+    action:
+      type: "alert"
+      severity: "medium"
+      message: "Signal anomaly detected - possible FBS"
+      metadata:
+        detection_type: "signal_anomaly"
+        
+  - name: "FBS_Unauthenticated_Identity"
+    id: "fbs_006"
+    description: "Detect unauthenticated identity requests"
+    priority: 8
+    condition:
+      field: "unauthenticated_id"
+      neq: null
+    action:
+      type: "alert"
+      severity: "high"
+      message: "FBS Warning: Unauthenticated identity request"
+      metadata:
+        detection_type: "unauthenticated_id"
+        
+  - name: "FBS_Combined_Indicators"
+    id: "fbs_007"
+    description: "Detect FBS using combined indicators"
+    priority: 10
+    condition:
+      and:
+        - or:
+          - field: "attach_failures"
+            gte: 2
+          - field: "auth_reject_count"
+            gt: 0
+        - or:
+          - field: "cipher_downgrade"
+            eq: true
+          - field: "signal_anomaly"
+            eq: true
+          - field: "unexpected_redirect"
+            eq: true
+    action:
+      type: "alert"
+      severity: "critical"
+      message: "FBS DETECTED: Multiple indicators present"
+      metadata:
+        detection_type: "combined_indicators"
+        block_cell: true
+        
+  - name: "FBS_Unknown_PLMN"
+    id: "fbs_008"
+    description: "Detect connection to unknown PLMN"
+    priority: 8
+    condition:
+      and:
+        - field: "plmn"
+          not_in: ["00101", "00102", "00103"]  # Whitelist of known PLMNs
+        - field: "signal_strength"
+          gt: -70  # Strong signal from unknown network
+    action:
+      type: "alert"
+      severity: "high"
+      message: "Unknown PLMN with strong signal - possible FBS"
+      metadata:
+        detection_type: "unknown_plmn"
+        
+  - name: "FBS_LAC_Change_Pattern"
+    id: "fbs_009"
+    description: "Detect unusual Location Area Code changes"
+    priority: 7
+    condition:
+      field: "unusual_lai_changes"
+      gte: 3
+    action:
+      type: "alert"
+      severity: "medium"
+      message: "Unusual LAC change pattern detected"
+      metadata:
+        detection_type: "lac_pattern"
+        
+  - name: "FBS_Emergency_Block"
+    id: "fbs_010"
+    description: "Immediate action on confirmed FBS"
+    priority: 10
+    condition:
+      field: "suspected_fbs"
+      eq: true
+    action:
+      type: "block"
+      severity: "critical"
+      message: "BLOCKING: Confirmed FBS detection"
+      metadata:
+        detection_type: "confirmed_fbs"
+        disconnect_ue: true
+        blacklist_cell: true

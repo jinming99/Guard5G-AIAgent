@@ -1,0 +1,238 @@
+{
+    "name": "Advanced FBS Attack Scenario",
+    "description": "Sophisticated fake base station attack with multiple phases",
+    "mode": "fbs",
+    "duration": 300,
+    "author": "LLM-Generated",
+    "version": "1.0",
+    
+    "config": {
+      "plmn": "00101",
+      "pci": 999,
+      "tac": 999,
+      "tx_power": 20,
+      "frequency": 3500,
+      "bandwidth": 20,
+      "cipher_algorithm": "nea0",
+      "integrity_algorithm": "nia0",
+      "max_ue_connections": 100,
+      "reject_probability": 0.0
+    },
+    
+    "phases": [
+      {
+        "name": "Reconnaissance",
+        "start_time": 0,
+        "duration": 30,
+        "description": "Passive monitoring and network discovery"
+      },
+      {
+        "name": "Initial Attack",
+        "start_time": 30,
+        "duration": 60,
+        "description": "Start broadcasting with legitimate-looking parameters"
+      },
+      {
+        "name": "Power Escalation",
+        "start_time": 90,
+        "duration": 60,
+        "description": "Gradually increase power to overpower legitimate signal"
+      },
+      {
+        "name": "Active Interception",
+        "start_time": 150,
+        "duration": 90,
+        "description": "Intercept and manipulate UE connections"
+      },
+      {
+        "name": "Cleanup",
+        "start_time": 240,
+        "duration": 60,
+        "description": "Gradual power reduction and shutdown"
+      }
+    ],
+    
+    "events": [
+      {
+        "time": 0,
+        "action": "log",
+        "message": "FBS scenario started - Reconnaissance phase"
+      },
+      {
+        "time": 30,
+        "action": "start_fbs",
+        "config": {
+          "silent_mode": true,
+          "tx_power": 10
+        }
+      },
+      {
+        "time": 45,
+        "action": "configure",
+        "param": "tx_power",
+        "value": 15,
+        "reason": "Slight power increase to attract nearby UEs"
+      },
+      {
+        "time": 60,
+        "action": "configure",
+        "param": "reject_probability",
+        "value": 0.2,
+        "reason": "Start rejecting some connections to appear selective"
+      },
+      {
+        "time": 90,
+        "action": "increase_power",
+        "value": 10,
+        "reason": "Power escalation phase begins"
+      },
+      {
+        "time": 100,
+        "action": "configure",
+        "param": "cipher",
+        "value": "null",
+        "reason": "Downgrade to null cipher for interception"
+      },
+      {
+        "time": 120,
+        "action": "increase_power",
+        "value": 5,
+        "reason": "Further power increase"
+      },
+      {
+        "time": 135,
+        "action": "change_identity",
+        "pci": 1,
+        "reason": "Spoof legitimate cell PCI"
+      },
+      {
+        "time": 150,
+        "action": "configure",
+        "param": "reject_probability",
+        "value": 0.8,
+        "reason": "Reject most connections to cause DoS"
+      },
+      {
+        "time": 180,
+        "action": "configure",
+        "param": "redirect_enabled",
+        "value": true,
+        "reason": "Start redirecting UEs to malicious frequencies"
+      },
+      {
+        "time": 200,
+        "action": "jam_frequency",
+        "frequency": 3510,
+        "bandwidth": 5,
+        "reason": "Jam adjacent frequency to prevent escape"
+      },
+      {
+        "time": 220,
+        "action": "change_identity",
+        "pci": 999,
+        "reason": "Revert to fake PCI before shutdown"
+      },
+      {
+        "time": 240,
+        "action": "configure",
+        "param": "tx_power",
+        "value": 15,
+        "reason": "Begin power reduction"
+      },
+      {
+        "time": 260,
+        "action": "configure",
+        "param": "tx_power",
+        "value": 10,
+        "reason": "Further power reduction"
+      },
+      {
+        "time": 280,
+        "action": "configure",
+        "param": "tx_power",
+        "value": 5,
+        "reason": "Minimal power before shutdown"
+      },
+      {
+        "time": 295,
+        "action": "stop_fbs",
+        "reason": "Scenario complete - shutting down FBS"
+      },
+      {
+        "time": 300,
+        "action": "log",
+        "message": "FBS scenario completed successfully"
+      }
+    ],
+    
+    "expected_detections": [
+      {
+        "time_range": [30, 60],
+        "indicators": ["new_cell_appeared", "unknown_pci"],
+        "confidence": "low"
+      },
+      {
+        "time_range": [60, 90],
+        "indicators": ["attach_failures", "connection_rejects"],
+        "confidence": "medium"
+      },
+      {
+        "time_range": [90, 150],
+        "indicators": ["signal_anomaly", "rapid_power_increase"],
+        "confidence": "high"
+      },
+      {
+        "time_range": [100, 150],
+        "indicators": ["cipher_downgrade", "null_encryption"],
+        "confidence": "critical"
+      },
+      {
+        "time_range": [150, 240],
+        "indicators": ["dos_attack", "mass_rejections", "forced_redirects"],
+        "confidence": "critical"
+      }
+    ],
+    
+    "metrics": {
+      "target_detection_time": 60,
+      "acceptable_false_positives": 2,
+      "required_detection_confidence": 0.8,
+      "max_ue_impact": 10
+    },
+    
+    "variations": [
+      {
+        "name": "Stealth Mode",
+        "changes": {
+          "config.tx_power": 5,
+          "events": "remove_power_escalation",
+          "duration": 600
+        }
+      },
+      {
+        "name": "Aggressive Mode",
+        "changes": {
+          "config.tx_power": 30,
+          "config.reject_probability": 1.0,
+          "duration": 120
+        }
+      },
+      {
+        "name": "Identity Spoofing Focus",
+        "changes": {
+          "config.pci": 1,
+          "config.tac": 1,
+          "config.plmn": "00101",
+          "events": "remove_pci_changes"
+        }
+      }
+    ],
+    
+    "notes": [
+      "This scenario simulates a sophisticated FBS attack with multiple phases",
+      "Detection should occur within 60 seconds of attack start",
+      "The attack includes reconnaissance, power escalation, and active interception",
+      "Cleanup phase helps avoid detection by security teams",
+      "Variations test different attack strategies and detection responses"
+    ]
+  }

@@ -1,0 +1,173 @@
+# Prompt Templates for LLM Rule Generation
+# Location: llm_fbs_utils/prompt_templates/rule_generation.yaml
+
+system_prompt: |
+  You are an expert in 5G network security and P-BEST rule generation.
+  Your task is to analyze network telemetry and generate detection rules for fake base station (FBS) attacks.
+  
+  P-BEST rules follow this structure:
+  - name: Descriptive rule name
+  - condition: Detection logic using field comparisons
+  - action: What to do when condition matches
+
+few_shot_examples:
+  - input: |
+      Pattern detected: Multiple authentication failures from same UE within 60 seconds
+      Fields: auth_reject_count=3, time_window=60
+    output: |
+      rules:
+        - name: "FBS_Auth_Failure_Pattern"
+          priority: 9
+          condition:
+            and:
+              - field: "auth_reject_count"
+                gte: 3
+              - field: "time_window"
+                lte: 60
+          action:
+            type: "alert"
+            severity: "high"
+            message: "Potential FBS: Multiple auth failures detected"
+
+  - input: |
+      Pattern detected: Null cipher algorithm in use
+      Fields: cipher_algo="NULL"
+    output: |
+      rules:
+        - name: "FBS_Null_Cipher"
+          priority: 10
+          condition:
+            field: "cipher_algo"
+            eq: "NULL"
+          action:
+            type: "alert"
+            severity: "critical"
+            message: "FBS Detected: Null ciphering active"
+
+  - input: |
+      Pattern detected: Rapid cell reselections with signal anomaly
+      Fields: cell_reselection_count=5, signal_anomaly=true, rsrp_delta=25
+    output: |
+      rules:
+        - name: "FBS_Rapid_Reselection_Anomaly"
+          priority: 8
+          condition:
+            and:
+              - field: "cell_reselection_count"
+                gte: 5
+              - field: "signal_anomaly"
+                eq: true
+              - field: "rsrp_delta"
+                gt: 20
+          action:
+            type: "alert"
+            severity: "high"
+            message: "FBS suspected: Rapid reselections with signal anomaly"
+
+analysis_prompt: |
+  Analyze the following network telemetry for FBS indicators:
+  
+  {telemetry}
+  
+  Look for:
+  1. Authentication and attach failures
+  2. Cipher algorithm downgrades
+  3. Unusual signal patterns
+  4. Rapid cell reselections
+  5. Unknown or suspicious cell identities
+  
+  Provide your analysis including:
+  - Whether FBS is detected (yes/no)
+  - Confidence level (low/medium/high)
+  - Key indicators found
+  - Recommended actions
+
+experiment_design_prompt: |
+  Design an FBS simulation experiment to test the following hypothesis:
+  
+  {hypothesis}
+  
+  Constraints:
+  - Use ZMQ RF simulator (no real radio)
+  - Duration: 60-300 seconds
+  - Available parameters: plmn, pci, tac, tx_power, cipher
+  
+  Create a JSON scenario with:
+  - name: Descriptive name
+  - mode: "fbs"
+  - duration: seconds
+  - config: Initial FBS configuration
+  - events: List of timed actions
+  
+  Example event:
+  {
+    "time": 30,
+    "action": "increase_power",
+    "value": 10
+  }
+
+data_analysis_prompt: |
+  Generate Python code to analyze MobiFlow records for the following goal:
+  
+  {goal}
+  
+  MobiFlow records are dictionaries with these fields:
+  - ue_id: UE identifier
+  - cell_id: Cell identifier
+  - timestamp: Unix timestamp
+  - attach_failures: Count of failures
+  - auth_reject_count: Authentication rejections
+  - signal_anomaly: Boolean flag
+  - cipher_downgrade: Boolean flag
+  - suspected_fbs: Boolean flag
+  
+  Generate clean, efficient Python code using pandas where appropriate.
+  Include proper error handling and comments.
+
+validation_rules:
+  condition_operators:
+    - eq      # Equal
+    - neq     # Not equal
+    - gt      # Greater than
+    - lt      # Less than
+    - gte     # Greater than or equal
+    - lte     # Less than or equal
+    - contains # String contains
+    - matches  # Regex match
+    - in      # In list
+    - not_in  # Not in list
+    
+  logical_operators:
+    - and     # All conditions must match
+    - or      # Any condition must match
+    - not     # Negate condition
+    
+  action_types:
+    - alert   # Raise alert
+    - block   # Block connection
+    - log     # Log event
+    - notify  # Send notification
+    
+  severity_levels:
+    - critical
+    - high
+    - medium
+    - low
+    - info
+
+rule_optimization_prompt: |
+  Optimize the following P-BEST rule to reduce false positives while maintaining detection accuracy:
+  
+  Original rule:
+  {original_rule}
+  
+  False positive rate: {fp_rate}%
+  Detection rate: {detection_rate}%
+  
+  Improve the rule by:
+  1. Adjusting thresholds
+  2. Adding additional conditions
+  3. Combining multiple indicators
+  4. Considering time windows
+  
+  Return the optimized rule in the same YAML format.
