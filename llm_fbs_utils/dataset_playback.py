@@ -33,9 +33,9 @@ class DatasetPlayer:
         )
         
         try:
-    self.redis_client.ping()
-except Exception as e:
-    logger.warning("Redis not reachable at init: %s (will retry on first use)", e)
+            self.redis_client.ping()
+        except Exception as e:
+            logger.warning("Redis not reachable at init: %s (will retry on first use)", e)
 
 
         self.playback_speed = 1.0  # 1.0 = realtime, 2.0 = 2x speed
@@ -122,41 +122,47 @@ except Exception as e:
         # MobiFlow record key
         key = f"mobiflow:ue:{ue_id}:{int(timestamp * 1000)}"
         
-        # Store in Redis
-        self.redis_client.setex(
-            key,
-            3600,  # 1 hour TTL
-            json.dumps(record)
-        )
-        
-        # Update latest record pointer
-        self.redis_client.set(f"mobiflow:ue:{ue_id}:latest", json.dumps(record))
-        
-        # Update statistics
-        self.redis_client.incr("stats:mobiflow_count")
-        
-        # Check for FBS indicators and update if detected
-        if record.get('suspected_fbs'):
-            self.redis_client.incr("stats:fbs_detections")
+        try:
+            # Store in Redis
+            self.redis_client.setex(
+                key,
+                3600,  # 1 hour TTL
+                json.dumps(record)
+            )
             
-            # Store alert
-            alert_key = f"alert:fbs:{ue_id}:{int(timestamp)}"
-            alert = {
-                'type': 'FBS_DETECTION',
-                'ue_id': ue_id,
-                'timestamp': timestamp,
-                'indicators': record.get('indicators', [])
-            }
-            self.redis_client.setex(alert_key, 3600, json.dumps(alert))
+            # Update latest record pointer
+            self.redis_client.set(f"mobiflow:ue:{ue_id}:latest", json.dumps(record))
+            
+            # Update statistics
+            self.redis_client.incr("stats:mobiflow_count")
+            
+            # Check for FBS indicators and update if detected
+            if record.get('suspected_fbs'):
+                self.redis_client.incr("stats:fbs_detections")
+                
+                # Store alert
+                alert_key = f"alert:fbs:{ue_id}:{int(timestamp)}"
+                alert = {
+                    'type': 'FBS_DETECTION',
+                    'ue_id': ue_id,
+                    'timestamp': timestamp,
+                    'indicators': record.get('indicators', [])
+                }
+                self.redis_client.setex(alert_key, 3600, json.dumps(alert))
+        except Exception as e:
+            logger.warning("Redis not available, skipping MobiFlow inject: %s", e)
     
     def inject_kpm_data(self, ue_id: str, kpm_data: Dict):
         """Inject KPM data into SDL"""
         key = f"kpm:{ue_id}:latest"
-        self.redis_client.set(key, json.dumps(kpm_data))
-        
-        # Store historical KPM
-        hist_key = f"kpm:{ue_id}:{int(time.time() * 1000)}"
-        self.redis_client.setex(hist_key, 3600, json.dumps(kpm_data))
+        try:
+            self.redis_client.set(key, json.dumps(kpm_data))
+            
+            # Store historical KPM
+            hist_key = f"kpm:{ue_id}:{int(time.time() * 1000)}"
+            self.redis_client.setex(hist_key, 3600, json.dumps(kpm_data))
+        except Exception as e:
+            logger.warning("Redis not available, skipping KPM inject: %s", e)
     
     def play_dataset(self, records: List[Dict], realtime: bool = True):
         """Play dataset records into SDL"""
@@ -316,25 +322,37 @@ except Exception as e:
             "stats:*"
         ]
         
-        for pattern in patterns:
-            batch = []
-            for k in self.redis_client.scan_iter(match=pattern, count=1000):
-                batch.append(k)
-                if len(batch) >= 1000:
+        try:
+            for pattern in patterns:
+                batch = []
+                for k in self.redis_client.scan_iter(match=pattern, count=1000):
+                    batch.append(k)
+                    if len(batch) >= 1000:
+                        self.redis_client.delete(*batch)
+                        batch.clear()
+                if batch:
                     self.redis_client.delete(*batch)
-                    batch.clear()
-            if batch:
-                self.redis_client.delete(*batch)
+        except Exception as e:
+            logger.warning("Skipping SDL clear due to Redis error: %s", e)
 
     
     def get_playback_stats(self) -> Dict:
         """Get playback statistics from SDL"""
-        stats = {
-            'mobiflow_count': self.redis_client.get("stats:mobiflow_count") or 0,
-            'fbs_detections': self.redis_client.get("stats:fbs_detections") or 0,
-            'unique_ues': len(self.redis_client.keys("mobiflow:ue:*:latest")),
-            'alerts': len(self.redis_client.keys("alert:*"))
-        }
+        try:
+            stats = {
+                'mobiflow_count': self.redis_client.get("stats:mobiflow_count") or 0,
+                'fbs_detections': self.redis_client.get("stats:fbs_detections") or 0,
+                'unique_ues': len(self.redis_client.keys("mobiflow:ue:*:latest")),
+                'alerts': len(self.redis_client.keys("alert:*"))
+            }
+        except Exception as e:
+            logger.warning("Redis not available for stats, returning zeros: %s", e)
+            stats = {
+                'mobiflow_count': 0,
+                'fbs_detections': 0,
+                'unique_ues': 0,
+                'alerts': 0,
+            }
         return stats
 
 # ============================================================================

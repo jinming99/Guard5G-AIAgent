@@ -2,7 +2,6 @@
 # Location: llm_fbs_utils/requirements.txt
 
 # Core Dependencies
-python>=3.8
 
 # Web Framework
 flask==2.3.3
@@ -83,7 +82,7 @@ tenacity==8.2.3
 
 # Configuration Management
 configparser==6.0.0
-pydantic==2.3.0
+pydantic==2.5.0
 
 # Optional: For OAI Integration
 pyzmq==25.1.1  # For ZMQ communication

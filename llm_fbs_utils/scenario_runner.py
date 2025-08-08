@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 OAI_HOST = os.getenv('OAI_HOST', 'localhost')
 OAI_USER = os.getenv('OAI_USER', 'root')
-OAI_PATH = os.getenv('OAI_PATH', '/opt/oai-5g')
+OAI_PATH = os.getenv('OAI_PATH', '/opt/oai-5g')  # default; will re-read at call time
 DOCKER_CONTAINER = os.getenv('OAI_CONTAINER', 'oai-gnb')
 
 @dataclass
@@ -113,8 +113,9 @@ class ScenarioRunner:
         logger.info("Starting FBS with config:")
         logger.info(json.dumps(config, indent=2))
         
-        # Build launch command
-        script_path = f"{OAI_PATH}/tools/fbs_scenarios/launch_fbs.sh"
+        # Build launch command (read OAI_PATH at runtime to honor env set by tests)
+        oai_path = os.getenv('OAI_PATH', OAI_PATH)
+        script_path = f"{oai_path}/tools/fbs_scenarios/launch_fbs.sh"
         
         # Create temporary config file
         config_file = f"/tmp/fbs_config_{int(time.time())}.json"
@@ -145,7 +146,8 @@ class ScenarioRunner:
         """Stop fake base station"""
         logger.info("Stopping FBS...")
         
-        script_path = f"{OAI_PATH}/tools/fbs_scenarios/launch_fbs.sh"
+        oai_path = os.getenv('OAI_PATH', OAI_PATH)
+        script_path = f"{oai_path}/tools/fbs_scenarios/launch_fbs.sh"
         command = f"{script_path} stop"
         
         stdout, stderr = self._execute_command(command)
@@ -161,7 +163,8 @@ class ScenarioRunner:
         """Configure FBS parameter"""
         logger.info(f"Configuring FBS: {param} = {value}")
         
-        script_path = f"{OAI_PATH}/tools/fbs_scenarios/launch_fbs.sh"
+        oai_path = os.getenv('OAI_PATH', OAI_PATH)
+        script_path = f"{oai_path}/tools/fbs_scenarios/launch_fbs.sh"
         command = [script_path, "configure", str(param), str(value)]
 
         

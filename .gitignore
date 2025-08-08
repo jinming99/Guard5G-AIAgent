@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+.dist/
+build/
+.coverage
+.pytest_cache/
+.mypy_cache/
+
+# Virtual envs
+.venv/
+venv/
+ENV/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Logs & outputs
+logs/
+**/logs/
+tests/logs/
+evaluation_results/
+
+# Log files
+*.log
+**/*.log
+
+# Environment/secrets
+.env
+.env.*
+*.env
+
+# Node (if any frontend experiments)
+node_modules/
