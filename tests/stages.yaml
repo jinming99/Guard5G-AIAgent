@@ -1,0 +1,25 @@
+stages:
+  unit:
+    - tests/00_run_unit_tests.py
+
+  env:
+    - tests/00_env_check.sh
+
+  simulator:
+    - tests/02_launch_fbs_scenario.sh
+    - tests/09_timing_waits.py
+
+  oran:
+    - tests/01_oran_socket_client.py
+
+  rules:
+    - tests/04_rule_patch_cycle.py
+
+  agent:
+    - tests/06_workflow_agent_offline.py
+
+  e2e:
+    - tests/08_e2e_synthetic_pipeline.py
+    - llm_fbs_utils/tests/test_simulator_comprehensive.py
+    - llm_fbs_utils/tests/test_llm_comprehensive.py
+    - llm_fbs_utils/tests/run_integration_tests.py

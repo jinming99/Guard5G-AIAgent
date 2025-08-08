@@ -19,10 +19,15 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 import numpy as np
 
-import dspy
-from dspy_modules.enhanced_modules import (
-    QueryNetwork, RuleGenerator, ExperimentDesigner, DataAnalyst
-)
+try:
+    import dspy
+except ImportError:
+    dspy = None
+try:
+    from dspy_modules.enhanced_modules import QueryNetwork, RuleGenerator, ExperimentDesigner, DataAnalyst
+except ImportError:
+    from enhanced_modules import QueryNetwork, RuleGenerator, ExperimentDesigner, DataAnalyst
+
 
 logger = logging.getLogger(__name__)
 

@@ -150,7 +150,7 @@ def validate_single_rule(rule: Dict, idx: int) -> List[str]:
         else:
             # Check for valid condition operators
             valid_operators = ['and', 'or', 'not', 'eq', 'neq', 'gt', 'lt', 
-                             'gte', 'lte', 'contains', 'matches']
+                             'gte', 'lte', 'contains', 'matches', 'in','not_in']
             condition_ops = set(rule['condition'].keys())
             invalid_ops = condition_ops - set(valid_operators + ['field', 'value'])
             
@@ -279,8 +279,9 @@ def save_rules_to_file(rules: Dict):
     try:
         # Save to experiments directory
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"experiments/generated_rules/rules_{timestamp}.yaml"
-        
+        base_dir = os.environ.get("PBEST_RULES_DIR", "experiments/generated_rules")
+        filename = os.path.join(base_dir, f"rules_{timestamp}.yaml")
+
         import os
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         

@@ -1,8 +1,9 @@
 import time
 from enum import Enum
 
+
 def get_time_ms():
-    return time.time() * 1000
+    return int(time.time() * 1000)
 
 ###################### Auxiliary classes ######################
 

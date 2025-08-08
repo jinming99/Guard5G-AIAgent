@@ -620,15 +620,28 @@
    memcpy(extended_params, cmdline_params, sizeof(paramdef_t) * num_params);
    
    /* Add scenario-file parameter */
+
    paramdef_t scenario_param = {
-     .optname = "scenario-file",
-     .helpstr = "Load scenario configuration from JSON file for FBS simulation",
-     .paramflags = PARAMFLAG_BOOL,
-     .strptr = &scenario_file,
-     .defstrval = NULL,
-     .type = TYPE_STRING,
-     .numelt = 0
+    .optname = "scenario-file",
+    .helpstr = "Load scenario configuration from JSON file for FBS simulation",
+    .paramflags = 0,            // not a boolean flag; expects a string
+    .strptr = &scenario_file,
+    .defstrval = NULL,
+    .type = TYPE_STRING,
+    .numelt = 0
    };
+  
+
+   paramdef_t scenario_param = {
+    .optname = "scenario-file",
+    .helpstr = "Load scenario configuration from JSON file for FBS simulation",
+    .paramflags = 0,            // not a boolean flag; expects a string
+    .strptr = &scenario_file,
+    .defstrval = NULL,
+    .type = TYPE_STRING,
+    .numelt = 0
+   };
+  
    extended_params[num_params] = scenario_param;
    
    CONFIG_SETRTFLAG(CONFIG_NOEXITONHELP);

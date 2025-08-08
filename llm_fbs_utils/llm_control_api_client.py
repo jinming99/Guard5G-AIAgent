@@ -64,10 +64,12 @@ class APIClient:
             logger.error(f"Unexpected error: {e}")
             return {'status': 'error', 'message': str(e)}
     
+
     def health_check(self) -> bool:
         """Check if API is accessible"""
         result = self._request('GET', '/health')
-        return result.get('status') == 'healthy'
+        status = str(result.get('status', '')).lower()
+        return status in ('healthy', 'ok', 'success')
 
 # ============================================================================
 # MobiFlow-Auditor API Client
@@ -167,23 +169,21 @@ def test_rule(rule: Dict, test_data: Dict) -> Dict:
     """Test a rule"""
     return expert.test_rule(rule, test_data)
 
-def wait_for_services(timeout: int = 60) -> bool:
+def wait_for_services(timeout: int = 60, poll: int = 5) -> bool:
     """Wait for both services to be ready"""
-    start_time = time.time()
-    
-    while time.time() - start_time < timeout:
+    start = time.time()
+    while time.time() - start < timeout:
         try:
             if auditor.health_check() and expert.health_check():
                 logger.info("All services are ready")
                 return True
-        except:
-            pass
-        
+        except Exception as e:
+            logger.debug("Service check failed temporarily: %s", e)
         logger.info("Waiting for services...")
-        time.sleep(5)
-    
-    logger.error("Services did not become ready in time")
+        time.sleep(poll)
+    logger.error("Services did not become ready within %ss", timeout)
     return False
+
 
 # ============================================================================
 # Advanced Query Functions

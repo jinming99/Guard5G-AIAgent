@@ -49,7 +49,8 @@ class SdlManager(_BaseManager):
 
     def get_nodeb_info_by_inventory_name(self, inventory_name) -> Dict:
         url = self.__E2_msgr_endpoint + inventory_name
-        response = requests.get(url)
+        response = requests.get(url, timeout=5)
+
         if response.status_code == 200:
             return json.loads(response.text)
         else:

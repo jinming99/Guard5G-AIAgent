@@ -3,7 +3,9 @@
 # Launch script for Fake Base Station (FBS) scenarios
 # Location: OAI-5G/tools/fbs_scenarios/launch_fbs.sh
 
-set -e
+
+set -euo pipefail
+IFS=$'\n\t'
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

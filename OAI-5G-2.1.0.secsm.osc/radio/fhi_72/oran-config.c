@@ -544,11 +544,15 @@
    
    // Create socket
    config_socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+
    if (config_socket_fd < 0) {
      printf("[ORAN] Failed to create config socket\n");
      return NULL;
    }
+   mask(0077); // restrict socket file perms
    
+   
+
    // Bind socket
    memset(&addr, 0, sizeof(addr));
    addr.sun_family = AF_UNIX;
@@ -593,7 +597,8 @@
            send(client_fd, json, strlen(json), 0);
            free(json);
          } else {
-           send(client_fd, "{\"error\":\"Config not available\"}", 33, 0);
+           const char *msg = "{\"status\":\"error\",\"message\":\"Config not available\"}";
+           send(client_fd, msg, strlen(msg), 0);
          }
        }
        else if (strncmp(buffer, "SET_MTU ", 8) == 0) {
@@ -647,12 +652,23 @@
  
  // === NEW: Cleanup function ===
  void oran_config_cleanup(void) {
+
    if (config_socket_fd >= 0) {
-     close(config_socket_fd);
-     unlink(ORAN_CONFIG_SOCKET_PATH);
-     printf("[ORAN] Config socket closed\n");
+    close(config_socket_fd);
+    unlink(ORAN_CONFIG_SOCKET_PATH);
+    config_socket_fd = -1;
+    printf("[ORAN] Config socket closed\n");
    }
+   if (global_fh_config_copy) {
+    free(global_fh_config_copy);
+    global_fh_config_copy = NULL;
+    global_fh_config = NULL;
+   }
+  
+
  }
+
+ 
  
  static const paramdef_t *gpd(const paramdef_t *pd, int num, const char *name)
  {
@@ -1078,8 +1094,21 @@
    fh_config->max_sections_per_slot = 8;
    fh_config->max_sections_per_symbol = 8;
  
-   // === NEW: Store config globally and export to JSON ===
-   global_fh_config = fh_config;
+
+
+  // === NEW: Store config globally and export to JSON ===
+  static struct xran_fh_config *global_fh_config_copy = NULL;
+  if (global_fh_config_copy == NULL) {
+    global_fh_config_copy = malloc(sizeof(*global_fh_config_copy));
+  }
+  if (global_fh_config_copy) {
+    memcpy(global_fh_config_copy, fh_config, sizeof(*global_fh_config_copy));
+    global_fh_config = global_fh_config_copy; // expose stable copy to socket thread
+  } else {
+    printf("[ORAN] Failed to allocate memory for fh_config copy\n");
+  }
+
+
    
    // Export initial config to file for reference
    FILE *fp = fopen("/tmp/oai_oran_config.json", "w");

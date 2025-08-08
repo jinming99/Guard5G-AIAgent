@@ -30,11 +30,24 @@ logger = logging.getLogger(__name__)
 
 try:
     # Try to import enhanced modules
-    from dspy_modules.enhanced_modules import (
-        QueryNetwork, RuleGenerator, ExperimentDesigner, DataAnalyst
-    )
-    from agent.workflow_agent import WorkflowAwareAgent
+
+
+    try:
+        from dspy_modules.enhanced_modules import (
+            QueryNetwork, RuleGenerator, ExperimentDesigner, DataAnalyst
+        )
+    except ImportError:
+        # fallback import path for flat layouts
+        from enhanced_modules import (
+            QueryNetwork, RuleGenerator, ExperimentDesigner, DataAnalyst
+        )
+    try:
+        from agent.workflow_agent import WorkflowAwareAgent
+    except ImportError:
+        from workflow_agent import WorkflowAwareAgent
     ENHANCED_MODE = True
+
+
     logger.info("Using enhanced DSPy modules with preprocessing")
 except ImportError:
     # Fallback to basic implementation
@@ -150,9 +163,8 @@ class LLMOrchestrator:
         self.experiment = ExperimentDesigner()
         self.data_analysis = DataAnalyst()
         
-        # Setup DSPy if not in enhanced mode
-        if not self.use_enhanced:
-            self.setup_dspy()
+        # Setup DSPy (used by both flows when available)
+        self.setup_dspy()
     
     def _load_config(self, config_file: str) -> Dict:
         """Load configuration"""
@@ -178,10 +190,14 @@ class LLMOrchestrator:
     
     def setup_dspy(self):
         """Configure DSPy with LLM"""
-        if not ENHANCED_MODE:
+        # Configure DSPy only if available and enabled in config
+        if not self.config.get('llm', {}).get('enable_dspy', True):
             return
-            
-        import dspy
+        try:
+            import dspy
+        except ImportError:
+            logger.warning("DSPy not installed; skipping DSPy configuration")
+            return
         
         model = self.config['llm']['model']
         

@@ -17,7 +17,10 @@ from typing import Dict, List, Tuple
 import logging
 from pathlib import Path
 import argparse
-import matplotlib.pyplot as plt
+import matplotlib.pyplot as pl
+import matplotlib
+matplotlib.use("Agg")
+
 import seaborn as sns
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -25,7 +28,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from llm_control_api_client import get_mobiflow, get_stats, post_rule
-from scenario_runner import ScenarioRunner, ScenarioLibrary
+
+from scenario_runner import ScenarioRunner, ScenarioLibrary, ScenarioConfig
+
 from dataset_playback import DatasetPlayer
 from llm_driver import LLMOrchestrator
 
@@ -115,7 +120,10 @@ class EvaluationPipeline:
                 self.dataset_player.inject_mobiflow_record(record)
                 time.sleep(0.1)  # Simulate real-time
         else:
-            # Run actual scenario
+
+            # Run actual scenario (convert dict -> dataclass if needed)
+            if isinstance(scenario_config, dict):
+                scenario_config = ScenarioConfig.from_dict(scenario_config)
             self.scenario_runner.run_scenario(scenario_config)
         
         # Monitor detection

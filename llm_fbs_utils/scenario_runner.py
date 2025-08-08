@@ -88,16 +88,20 @@ class ScenarioRunner:
             elif self.use_docker:
                 # Execute in Docker container
                 docker_cmd = f"docker exec {DOCKER_CONTAINER} {command}"
+
                 result = subprocess.run(
-                    docker_cmd, shell=True, capture_output=True, text=True
+                    ["docker", "exec", DOCKER_CONTAINER] + command if isinstance(command, list) else ["bash","-lc", command],
+                    shell=False, capture_output=True, text=True
                 )
+
                 return result.stdout, result.stderr
             
             else:
                 # Execute locally
-                result = subprocess.run(
-                    command, shell=True, capture_output=True, text=True
-                )
+
+                cmd = command if isinstance(command, list) else ["bash","-lc", command]
+                result = subprocess.run(cmd, shell=False, capture_output=True, text=True)
+
                 return result.stdout, result.stderr
                 
         except Exception as e:
@@ -118,7 +122,10 @@ class ScenarioRunner:
         
         if self.use_ssh:
             # Write config via SSH
-            self.ssh_client.exec_command(f"echo '{config_json}' > {config_file}")
+            sftp = self.ssh_client.open_sftp()
+            with sftp.file(config_file, 'w') as fp:
+                fp.write(config_json)
+            sftp.close()
         else:
             with open(config_file, 'w') as f:
                 json.dump(config, f)
@@ -155,7 +162,8 @@ class ScenarioRunner:
         logger.info(f"Configuring FBS: {param} = {value}")
         
         script_path = f"{OAI_PATH}/tools/fbs_scenarios/launch_fbs.sh"
-        command = f"{script_path} configure {param} {value}"
+        command = [script_path, "configure", str(param), str(value)]
+
         
         stdout, stderr = self._execute_command(command)
         

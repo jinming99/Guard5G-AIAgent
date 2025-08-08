@@ -14,8 +14,11 @@ import argparse
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import scapy.all as scapy
+
+
 import pandas as pd
 from pathlib import Path
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,13 @@ class DatasetPlayer:
             port=redis_port,
             decode_responses=True
         )
+        
+        try:
+    self.redis_client.ping()
+except Exception as e:
+    logger.warning("Redis not reachable at init: %s (will retry on first use)", e)
+
+
         self.playback_speed = 1.0  # 1.0 = realtime, 2.0 = 2x speed
         self.loop_playback = False
         self.stop_playback = False
@@ -307,10 +317,15 @@ class DatasetPlayer:
         ]
         
         for pattern in patterns:
-            keys = self.redis_client.keys(pattern)
-            if keys:
-                self.redis_client.delete(*keys)
-                logger.info(f"Deleted {len(keys)} keys matching {pattern}")
+            batch = []
+            for k in self.redis_client.scan_iter(match=pattern, count=1000):
+                batch.append(k)
+                if len(batch) >= 1000:
+                    self.redis_client.delete(*batch)
+                    batch.clear()
+            if batch:
+                self.redis_client.delete(*batch)
+
     
     def get_playback_stats(self) -> Dict:
         """Get playback statistics from SDL"""

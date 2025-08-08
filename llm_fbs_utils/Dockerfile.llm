@@ -1,0 +1,18 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# System deps (add as needed for your analysis code; keep slim for fast builds)
+RUN apt-get update && apt-get install -y --no-install-recommends \    gcc \    git \    curl \    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install
+COPY llm_fbs_utils/requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy only the orchestrator utils (bind-mount in compose is recommended for live edits)
+COPY llm_fbs_utils /app
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+CMD ["python", "llm_driver.py", "interactive"]
