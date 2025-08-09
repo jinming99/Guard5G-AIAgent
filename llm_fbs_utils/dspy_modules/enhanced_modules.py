@@ -187,10 +187,10 @@ class TelemetryPreprocessor:
         
         # Statistical summary
         summary = {
-            'total_records': len(df),
-            'time_span': (df['timestamp'].max() - df['timestamp'].min()).total_seconds() if 'timestamp' in df.columns else 0,
-            'unique_ues': df['ue_id'].nunique() if 'ue_id' in df.columns else 0,
-            'unique_cells': df['cell_id'].nunique() if 'cell_id' in df.columns else 0,
+            'total_records': int(len(df)),
+            'time_span': float((df['timestamp'].max() - df['timestamp'].min()).total_seconds()) if 'timestamp' in df.columns else 0.0,
+            'unique_ues': int(df['ue_id'].nunique()) if 'ue_id' in df.columns else 0,
+            'unique_cells': int(df['cell_id'].nunique()) if 'cell_id' in df.columns else 0,
             'statistics': {}
         }
         
@@ -223,24 +223,27 @@ class TelemetryPreprocessor:
         
         # Attachment failure pattern
         if 'attach_failures' in df.columns:
-            failure_rate = (df['attach_failures'] > 0).mean()
-            patterns['high_failure_rate'] = failure_rate > 0.3
+            failure_rate = float((df['attach_failures'] > 0).mean())
+            patterns['high_failure_rate'] = bool(failure_rate > 0.3)
             
             # Burst detection
             if len(df) > 10:
                 failures = df['attach_failures'].values
                 burst_detected = self._detect_bursts(failures)
-                patterns['failure_bursts'] = burst_detected
+                patterns['failure_bursts'] = bool(burst_detected)
         
         # Cell reselection pattern
         if 'cell_id' in df.columns:
-            cell_changes = df['cell_id'].diff().notna().sum()
-            patterns['frequent_reselections'] = cell_changes > len(df) * 0.2
+            # Avoid numeric diff on string/object columns; count changes via shift comparison
+            changes = (df['cell_id'] != df['cell_id'].shift()).fillna(False)
+            # subtract 1 if first row counted as change
+            cell_changes = int(max(changes.sum() - 1, 0))
+            patterns['frequent_reselections'] = bool(cell_changes > len(df) * 0.2)
         
         # Cipher downgrade pattern
         if 'cipher_algo' in df.columns:
-            null_cipher_ratio = (df['cipher_algo'] == 'NULL').mean() if 'cipher_algo' in df.columns else 0
-            patterns['cipher_downgrade_detected'] = null_cipher_ratio > 0
+            null_cipher_ratio = float((df['cipher_algo'] == 'NULL').mean()) if 'cipher_algo' in df.columns else 0.0
+            patterns['cipher_downgrade_detected'] = bool(null_cipher_ratio > 0)
         
         return patterns
     
@@ -269,7 +272,8 @@ class TelemetryPreprocessor:
                 anomaly_mask = z_scores > 3
                 
                 if anomaly_mask.any():
-                    anomaly_indices = df[anomaly_mask].index.tolist()
+                    # Cast indices to native Python ints for JSON serialization
+                    anomaly_indices = [int(i) for i in df[anomaly_mask].index.tolist()]
                     anomalies.append({
                         'type': f'{col}_outlier',
                         'indices': anomaly_indices,
@@ -430,16 +434,26 @@ class RuleGenerator(Module):
             
             if 'patterns' in mf:
                 for pattern, detected in mf['patterns'].items():
-                    if detected:
+                    if bool(detected):
                         context['threat_indicators'].append(pattern)
             
             if 'statistics' in mf:
                 # Calculate thresholds from statistics
                 for field, stats in mf['statistics'].items():
                     if field in ['attach_failures', 'auth_reject_count']:
-                        # Use 95th percentile as threshold
-                        threshold = stats['q75'] + 1.5 * (stats['q75'] - stats['q25'])
-                        context['thresholds'][field] = max(1, int(threshold))
+                        # Use high percentile / IQR-based threshold when available
+                        q25 = stats.get('q25')
+                        q75 = stats.get('q75')
+                        mean = stats.get('mean')
+                        std = stats.get('std', 0.0)
+                        if q25 is not None and q75 is not None:
+                            threshold = float(q75) + 1.5 * (float(q75) - float(q25))
+                        elif mean is not None:
+                            # Fallback to mean + 2*std if quartiles missing
+                            threshold = float(mean) + 2.0 * float(std or 0.0)
+                        else:
+                            threshold = 3.0
+                        context['thresholds'][field] = max(1, int(round(threshold)))
         
         # Add pattern-based conditions
         if patterns:
@@ -504,7 +518,8 @@ class ExperimentDesigner(Module):
         super().__init__()
         self.predictor = ChainOfThought(ExperimentDesignSignature)
         self.safety_checks = True
-        self.max_duration = 300  # Maximum experiment duration
+        # Keep duration within safe bound to satisfy safety checks and tests
+        self.max_duration = 120  # Maximum experiment duration
     
     def forward(self, hypothesis: str, current_performance: Dict,
                 constraints: Optional[Dict] = None) -> Dict:

@@ -17,6 +17,7 @@ from typing import Dict, List
 import numpy as np
 import pandas as pd
 import sys
+from datetime import datetime
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -362,7 +363,7 @@ class TestEvaluationMetrics(unittest.TestCase):
         
         # Verify calculations
         self.assertAlmostEqual(detection_rate, 0.8947, places=3)
-        self.assertEqual(false_positive_rate, 5.0)  # No true negatives
+        self.assertEqual(false_positive_rate, 1.0)  # No true negatives -> rate bounded to 1.0
         self.assertEqual(accuracy, 0.85)
     
     def test_custom_metric_creation(self):

@@ -1,0 +1,37 @@
+# resources/rule_templates/baseline_rules.yaml
+rules:
+  - name: "Baseline_Auth_Failure"
+    priority: 9
+    condition:
+      and:
+        - field: "auth_reject_count"
+          gte: 3
+        - field: "attach_failures"
+          gte: 1
+    action:
+      type: "alert"
+      severity: "high"
+      message: "Auth failure pattern"
+
+  - name: "Baseline_Signal_Anomaly"
+    priority: 7
+    condition:
+      and:
+        - field: "signal_anomaly"
+          eq: true
+        - field: "rsrp_delta"
+          gt: 20
+    action:
+      type: "alert"
+      severity: "medium"
+      message: "Signal anomaly + high RSRP delta"
+
+  - name: "Baseline_Cipher_Downgrade"
+    priority: 10
+    condition:
+      field: "cipher_downgrade"
+      eq: true
+    action:
+      type: "alert"
+      severity: "critical"
+      message: "Null cipher suspected"

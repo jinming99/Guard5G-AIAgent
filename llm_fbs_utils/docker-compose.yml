@@ -14,7 +14,9 @@ services:
       - redis-data:/data
     command: redis-server --appendonly yes
     networks:
-      - fbs-network
+      fbs-network:
+        aliases:
+          - service-ricplt-dbaas-tcp.ricplt.svc.cluster.local
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -24,32 +26,37 @@ services:
   # MobiFlow-Auditor xApp
   mobiflow-auditor:
     build:
-      context: ../MobiFlow-Auditor
+      context: https://github.com/5GSEC/MobiFlow-Auditor.git#main
       dockerfile: Dockerfile
+    platform: linux/amd64
     container_name: fbs-auditor
     depends_on:
       - redis-sdl
     environment:
       - SDL_HOST=redis-sdl
       - SDL_PORT=6379
+      - DBAAS_SERVICE_HOST=redis-sdl
+      - DBAAS_SERVICE_PORT=6379
       - ENABLE_LLM_API=true
       - LLM_API_PORT=8090
     ports:
-      - "8090:8090"  # LLM Control API
-      - "8080:8080"  # xApp API
+      - "8090:8080"  # Map host 8090 -> container 8080 (xApp API)
     volumes:
-      - ./MobiFlow-Auditor/src:/app/src
       - auditor-logs:/app/logs
     networks:
-      - fbs-network
-    command: python src/main.py --sdl-host redis-sdl --enable-llm-api
+      fbs-network:
+        aliases:
+          - service-ricplt-appmgr-http.ricplt
+    extra_hosts:
+      - "service-ricplt-appmgr-http.ricplt:127.0.0.1"
     restart: unless-stopped
 
   # MobieXpert Detection xApp
   mobiexpert:
     build:
-      context: ../MobieXpert
+      context: https://github.com/5GSEC/MobieXpert.git#main
       dockerfile: Dockerfile
+    platform: linux/amd64
     container_name: fbs-expert
     depends_on:
       - redis-sdl
@@ -57,17 +64,15 @@ services:
     environment:
       - SDL_HOST=redis-sdl
       - SDL_PORT=6379
+      - DBAAS_SERVICE_HOST=redis-sdl
+      - DBAAS_SERVICE_PORT=6379
       - RULE_API_PORT=8091
     ports:
-      - "8091:8091"  # Rule API
-      - "8081:8081"  # xApp API
+      - "8091:8080"  # Map host 8091 -> container 8080 (xApp API)
     volumes:
-      - ./MobieXpert/src:/app/src
-      - ./MobieXpert/experiments:/app/experiments
       - expert-logs:/app/logs
     networks:
       - fbs-network
-    command: python src/xapp.py --sdl-host redis-sdl
     restart: unless-stopped
 
   # OAI gNB (5G Base Station)

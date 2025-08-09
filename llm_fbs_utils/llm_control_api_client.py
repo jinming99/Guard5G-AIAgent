@@ -275,10 +275,10 @@ def monitor_realtime(callback, interval: int = 5, duration: int = 60):
         # Get latest records
         current_records = get_mobiflow(n=50)
         
-        # Find new records
+        # Find new records (deduplicated within this batch)
         new_records = []
         for record in current_records:
-            if record not in last_records:
+            if record not in last_records and record not in new_records:
                 new_records.append(record)
         
         if new_records:
@@ -286,7 +286,9 @@ def monitor_realtime(callback, interval: int = 5, duration: int = 60):
             callback(new_records)
         
         last_records = current_records
-        time.sleep(interval)
+        # Prevent a tight loop when interval is set to 0 in tests; clamp to a small floor.
+        sleep_time = interval if interval and interval > 0 else 0.05
+        time.sleep(sleep_time)
 
 # ============================================================================
 # Testing Functions

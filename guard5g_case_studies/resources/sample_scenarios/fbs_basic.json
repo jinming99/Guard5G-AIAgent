@@ -1,0 +1,16 @@
+{
+  "name": "Basic FBS demo",
+  "mode": "fbs",
+  "duration": 90,
+  "config": {
+    "plmn": "00101",
+    "pci": 888,
+    "tac": 12345,
+    "tx_power": 24,
+    "cipher": "NULL"
+  },
+  "events": [
+    {"time": 20, "action": "increase_power", "value": 6},
+    {"time": 45, "action": "change_identity", "pci": 1001}
+  ]
+}
